@@ -20,12 +20,12 @@ let db; // Declare db variable in outer scope
 const initializeDatabase = () => {
   return new Promise((resolve, reject) => {
     const tempConnection = mysql.createConnection({
-      host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+      host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
       user: process.env.DB_USER || 'baha',
       password: process.env.DB_PASSWORD || 'Cloud2025+'
     });
 
-    tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'backend-db'}`, (err) => {
+    tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'back-db'}`, (err) => {
       if (err) return reject(err);
       
       tempConnection.end();
@@ -33,10 +33,10 @@ const initializeDatabase = () => {
 
       // 🛠️ 3. Create main connection with promise
       db = mysql.createConnection({
-        host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+        host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
         user: process.env.DB_USER || 'baha',
         password: process.env.DB_PASSWORD || 'Cloud2025+',
-        database: process.env.DB_NAME || 'backend-db'
+        database: process.env.DB_NAME || 'back-db'
       });
 
       db.connect(async (err) => {
