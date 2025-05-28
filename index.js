@@ -69,7 +69,10 @@ tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'my
 
     app.get('/api/users', (req, res) => {
       db.query('SELECT * FROM users', (err, results) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+        if (err) {
+          console.error('MySQL error:', err);
+          return res.status(500).json({ error: 'Database error' }); 
+        }
         res.json(results);
       });
     });
