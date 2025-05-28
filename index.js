@@ -1,3 +1,4 @@
+const AWS = require('aws-sdk');
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -12,65 +13,72 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Database connection setup - MODIFIED SECTION
+let db; // Declare db variable in outer scope
+
 // First connection (without database) to create the database
-const tempConnection = mysql.createConnection({
-  host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-  user: process.env.DB_USER || 'baha',
-  password: process.env.DB_PASSWORD || 'Cloud2025+'
-});
+const initializeDatabase = () => {
+  // First connection (without database) to create the database
+  const tempConnection = mysql.createConnection({
+    host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+    user: process.env.DB_USER || 'baha',
+    password: process.env.DB_PASSWORD || 'Cloud2025+'
+  });
 
-tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'backend-db'}`, (err) => {
-  if (err) {
-    console.error('❌ Error creating database:', err);
-    return;
-  }
-  console.log('✅ Database ensured');
+  tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'backend-db'}`, (err) => {
+    if (err) {
+      console.error('❌ Error creating database:', err);
+      return;
+    }
+    console.log('✅ Database ensured');
+    tempConnection.end();
 
-  tempConnection.end();
+    // Create main database connection
+    db = mysql.createConnection({
+      host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+      user: process.env.DB_USER || 'baha',
+      password: process.env.DB_PASSWORD || 'Cloud2025+',
+      database: process.env.DB_NAME || 'backend-db'
+    });
 
-// Database connection
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-  user: process.env.DB_USER || 'baha',
-  password: process.env.DB_PASSWORD || 'Cloud2025+',
-  database: process.env.DB_NAME || 'backend-db'
-});
+    db.connect((err) => {
+      if (err) {
+        console.error('Error connecting to the database:', err);
+        return;
+      }
+      console.log('Connected to MySQL database');
+      
+      // Fixed SQL query formatting
+      const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          email VARCHAR(100) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `; // <-- FIXED CLOSING BACKTICK
 
-db.connect((err) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-    return;
-  }
-  console.log('Connected to MySQL database');
-  // Run SQL script on startup
-  const createTableQuery = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      email VARCHAR(100) NOT NULL UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `});
-  const insertUsersQuery = `
-    INSERT IGNORE INTO users (name, email) VALUES
-    ('John Doe', 'john@example.com'),
-    ('Jane Smith', 'jane@example.com'),
-    ('Bob Johnson', 'bob@example.com');
-  `;
+      const insertUsersQuery = `
+        INSERT IGNORE INTO users (name, email) VALUES
+        ('John Doe', 'john@example.com'),
+        ('Jane Smith', 'jane@example.com'),
+        ('Bob Johnson', 'bob@example.com');
+      `;
 
-  db.query(createTableQuery, (err, result) => {
-    if (err) console.error('❌ Error creating table:', err);
-    else console.log('✅ Users table ready');
+      db.query(createTableQuery, (err, result) => {
+        if (err) console.error('❌ Error creating table:', err);
+        else console.log('✅ Users table ready');
 
-    // Insert data after table creation
-    db.query(insertUsersQuery, (err, result) => {
-      if (err) console.error('❌ Error inserting users:', err);
-      else console.log('✅ Sample users inserted');
+        db.query(insertUsersQuery, (err, result) => {
+          if (err) console.error('❌ Error inserting users:', err);
+          else console.log('✅ Sample users inserted');
+        });
+      });
     });
   });
-});
+};
 
-
+initializeDatabase();
 
 // Routes
 app.get('/server-info', async (req, res) => {
@@ -109,15 +117,18 @@ app.get('/', (req, res) => {
 });
 
 
+// Routes MODIFIED TO USE DB PROPERLY
 app.get('/api/users', (req, res) => {
-  const query = 'SELECT * FROM users';
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' });
+  }
 
+  const query = 'SELECT * FROM users';
   db.query(query, (err, results) => {
     if (err) {
       console.error('Error executing query:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-
     res.json(results);
   });
 });
