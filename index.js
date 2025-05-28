@@ -17,7 +17,7 @@ const tempConnection = mysql.createConnection({
   password: process.env.DB_PASSWORD || 'Cloud2025+'
 });
 
-tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'database'}`, (err) => {
+tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'db'}`, (err) => {
   if (err) return console.error('❌ Error creating database:', err);
 
   console.log('✅ Database ensured');
@@ -27,7 +27,7 @@ tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'da
     host: process.env.DB_HOST || 'database.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
     user: process.env.DB_USER || 'baha',
     password: process.env.DB_PASSWORD || 'Cloud2025+',
-    database: process.env.DB_NAME || 'database
+    database: process.env.DB_NAME || 'db'
   });
 
   db.connect((err) => {
