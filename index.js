@@ -134,7 +134,7 @@ tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'da
     });
 
     // Start server only after everything is set up
-    const server = app.listen(port, () => {
+    const server = app.listen(port,'0.0.0.0', () => {
       console.log(`🚀 Server running on port ${port}`);
     });
 
