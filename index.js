@@ -81,28 +81,30 @@ const initializeDatabase = () => {
 initializeDatabase();
 
 // Routes
+// Server-info route FIXED
 app.get('/server-info', async (req, res) => {
   try {
-    // Get instance ID from EC2 metadata service
-    var meta  = new AWS.MetadataService();
     let instanceId = 'unknown';
     let availabilityZone = 'unknown';
 
     try {
-      // EC2 metadata is available at a special IP address from within EC2
-      instanceId = await axios.get('http://169.254.169.254/latest/meta-data/instance-id');
+      // PROPER METADATA FETCHING
+      const instanceResponse = await axios.get('http://169.254.169.254/latest/meta-data/instance-id', {
+        timeout: 2000
+      });
+      instanceId = instanceResponse.data;
 
-      availabilityZone = await axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone');
-      
-      
+      const azResponse = await axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone', {
+        timeout: 2000
+      });
+      availabilityZone = azResponse.data;
     } catch (error) {
       console.log('Not running on EC2 or metadata service not available');
     }
 
-    // Return server info
     res.json({
-      instanceId: instanceId.data,
-      availabilityZone: availabilityZone.data,
+      instanceId,
+      availabilityZone,
       hostname: os.hostname(),
       timestamp: new Date().toISOString()
     });
