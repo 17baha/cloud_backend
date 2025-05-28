@@ -1,4 +1,4 @@
-const AWS = require('aws-sdk');
+//const AWS = require('aws-sdk');
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
