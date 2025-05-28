@@ -1,4 +1,3 @@
-//const AWS = require('aws-sdk');
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -13,142 +12,89 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Database connection setup - MODIFIED SECTION
-let db; // Declare db variable in outer scope
-
 // First connection (without database) to create the database
-const initializeDatabase = () => {
-  return new Promise((resolve, reject) => {
-    const tempConnection = mysql.createConnection({
-      host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-      user: process.env.DB_USER || 'baha',
-      password: process.env.DB_PASSWORD || 'Cloud2025+'
-    });
+const tempConnection = mysql.createConnection({
+  host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+  user: process.env.DB_USER || 'baha',
+  password: process.env.DB_PASSWORD || 'Cloud2025+'
+});
 
-    tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'back-db'}`, (err) => {
-      if (err) return reject(err);
-      
-      tempConnection.end();
-      console.log('✅ Database ensured');
-
-      // 🛠️ 3. Create main connection with promise
-      db = mysql.createConnection({
-        host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-        user: process.env.DB_USER || 'baha',
-        password: process.env.DB_PASSWORD || 'Cloud2025+',
-        database: process.env.DB_NAME || 'back-db'
-      });
-
-      db.connect(async (err) => {
-        if (err) return reject(err);
-        console.log('✅ Connected to MySQL database');
-
-        try {
-          await createTables();
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      });
-    });
-  });
-};
-
-// 🛠️ 4. Separate table creation with error handling
-const createTables = () => {
-  return new Promise((resolve, reject) => {
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) NOT NULL UNIQUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );`;
-
-    db.query(createTableQuery, (err) => {
-      if (err) return reject(err);
-      console.log('✅ Users table ready');
-
-      const insertUsersQuery = `
-        INSERT IGNORE INTO users (name, email) VALUES
-        ('John Doe', 'john@example.com'),
-        ('Jane Smith', 'jane@example.com'),
-        ('Bob Johnson', 'bob@example.com');`;
-
-      db.query(insertUsersQuery, (err) => {
-        if (err) return reject(err);
-        console.log('✅ Sample users inserted');
-        resolve();
-      });
-    });
-  });
-};
-
-// 🛠️ 5. Initialize database before starting server
-initializeDatabase()
-  .then(() => {
-    const server = app.listen(port, () => {
-      console.log(`🚀 Server running on port ${port}`);
-    });
-
-    // 🛠️ 6. Proper shutdown handling
-    process.on('SIGTERM', () => {
-      console.log('🛑 SIGTERM received');
-      server.close(() => {
-        db.end();
-        console.log('🔌 Database connection closed');
-        process.exit(0);
-      });
-    });
-  })
-  .catch((err) => {
-    console.error('💥 FATAL INITIALIZATION ERROR:', err);
-    process.exit(1);
-  });
-
-// Routes (keep your existing routes but add connection check)
-app.get('/api/users', (req, res) => {
-  // 🛠️ 7. Better connection check
-  if (!db || db.state === 'disconnected') {
-    return res.status(503).json({ error: 'Database initializing, try again later' });
+tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'back-db'}`, (err) => {
+  if (err) {
+    console.error('❌ Error creating database:', err);
+    return;
   }
+  console.log('✅ Database ensured');
 
-  const query = 'SELECT * FROM users';
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error('🔴 Database error:', err);
-      return res.status(500).json({ error: 'Database query failed' });
-    }
-    res.json(results);
+  tempConnection.end();
+
+// Database connection
+const db = mysql.createConnection({
+  host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+  user: process.env.DB_USER || 'baha',
+  password: process.env.DB_PASSWORD || 'Cloud2025+',
+  database: process.env.DB_NAME || 'back-db'
+});
+
+db.connect((err) => {
+  if (err) {
+    console.error('Error connecting to the database:', err);
+    return;
+  }
+  console.log('Connected to MySQL database');
+  // Run SQL script on startup
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      email VARCHAR(100) NOT NULL UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `});
+  const insertUsersQuery = `
+    INSERT IGNORE INTO users (name, email) VALUES
+    ('John Doe', 'john@example.com'),
+    ('Jane Smith', 'jane@example.com'),
+    ('Bob Johnson', 'bob@example.com');
+  `;
+
+  db.query(createTableQuery, (err, result) => {
+    if (err) console.error('❌ Error creating table:', err);
+    else console.log('✅ Users table ready');
+
+    // Insert data after table creation
+    db.query(insertUsersQuery, (err, result) => {
+      if (err) console.error('❌ Error inserting users:', err);
+      else console.log('✅ Sample users inserted');
+    });
   });
 });
 
 
+
 // Routes
-// Server-info route FIXED
 app.get('/server-info', async (req, res) => {
   try {
+    // Get instance ID from EC2 metadata service
+    var meta  = new AWS.MetadataService();
     let instanceId = 'unknown';
     let availabilityZone = 'unknown';
 
     try {
-      // PROPER METADATA FETCHING
-      const instanceResponse = await axios.get('http://169.254.169.254/latest/meta-data/instance-id', {
-        timeout: 2000
-      });
-      instanceId = instanceResponse.data;
+      // EC2 metadata is available at a special IP address from within EC2
+      instanceId = await axios.get('http://169.254.169.254/latest/meta-data/instance-id');
 
-      const azResponse = await axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone', {
-        timeout: 2000
-      });
-      availabilityZone = azResponse.data;
+      availabilityZone = await axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone');
+      
+      
     } catch (error) {
       console.log('Not running on EC2 or metadata service not available');
     }
 
+    // Return server info
     res.json({
-      instanceId,
-      availabilityZone,
+      instanceId: instanceId.data,
+      availabilityZone: availabilityZone.data,
       hostname: os.hostname(),
       timestamp: new Date().toISOString()
     });
@@ -163,18 +109,15 @@ app.get('/', (req, res) => {
 });
 
 
-// Routes MODIFIED TO USE DB PROPERLY
 app.get('/api/users', (req, res) => {
-  if (!db) {
-    return res.status(500).json({ error: 'Database not initialized' });
-  }
-
   const query = 'SELECT * FROM users';
+
   db.query(query, (err, results) => {
     if (err) {
       console.error('Error executing query:', err);
       return res.status(500).json({ error: 'Database error' });
     }
+
     res.json(results);
   });
 });
@@ -258,4 +201,16 @@ app.delete('/api/users/:id', (req, res) => {
   });
 });
 
+// Start server
+const server = app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+});
