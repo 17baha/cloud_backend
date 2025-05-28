@@ -12,116 +12,142 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// First connection (without database) to create the database
-const tempConnection = mysql.createConnection({
-  host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-  user: process.env.DB_USER || 'baha',
-  password: process.env.DB_PASSWORD || 'Cloud2025+'
-});
+// Database connection setup
+let db; // Declare db in outer scope
 
-tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'back-db'}`, (err) => {
-  if (err) {
-    console.error('❌ Error creating database:', err);
-    return;
-  }
-  console.log('✅ Database ensured');
+const initializeDatabase = () => {
+  return new Promise((resolve, reject) => {
+    // First connection to create database if needed
+    const tempConnection = mysql.createConnection({
+      host: process.env.DB_HOST || 'database.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+      user: process.env.DB_USER || 'baha',
+      password: process.env.DB_PASSWORD || 'Cloud2025+'
+    });
 
-  tempConnection.end();
+    tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'database'}`, (err) => {
+      if (err) return reject(err);
+      
+      tempConnection.end();
+      console.log('✅ Database ensured');
 
-// Database connection
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'back-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-  user: process.env.DB_USER || 'baha',
-  password: process.env.DB_PASSWORD || 'Cloud2025+',
-  database: process.env.DB_NAME || 'back-db'
-});
+      // Create main database connection
+      db = mysql.createConnection({
+        host: process.env.DB_HOST || 'database.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+        user: process.env.DB_USER || 'baha',
+        password: process.env.DB_PASSWORD || 'Cloud2025+',
+        database: process.env.DB_NAME || 'database'
+      });
 
-db.connect((err) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-    return;
-  }
-  console.log('Connected to MySQL database');
-  // Run SQL script on startup
-  const createTableQuery = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      email VARCHAR(100) NOT NULL UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `});
-  const insertUsersQuery = `
-    INSERT IGNORE INTO users (name, email) VALUES
-    ('John Doe', 'john@example.com'),
-    ('Jane Smith', 'jane@example.com'),
-    ('Bob Johnson', 'bob@example.com');
-  `;
+      db.connect((err) => {
+        if (err) return reject(err);
+        console.log('✅ Connected to MySQL database');
 
-  db.query(createTableQuery, (err, result) => {
-    if (err) console.error('❌ Error creating table:', err);
-    else console.log('✅ Users table ready');
+        // Create tables
+        const createTableQuery = `
+          CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(100) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );`;
 
-    // Insert data after table creation
-    db.query(insertUsersQuery, (err, result) => {
-      if (err) console.error('❌ Error inserting users:', err);
-      else console.log('✅ Sample users inserted');
+        db.query(createTableQuery, (err) => {
+          if (err) return reject(err);
+          console.log('✅ Users table ready');
+
+          // Insert sample data
+          const insertUsersQuery = `
+            INSERT IGNORE INTO users (name, email) VALUES
+            ('John Doe', 'john@example.com'),
+            ('Jane Smith', 'jane@example.com'),
+            ('Bob Johnson', 'bob@example.com');`;
+
+          db.query(insertUsersQuery, (err) => {
+            if (err) return reject(err);
+            console.log('✅ Sample users inserted');
+            resolve();
+          });
+        });
+      });
     });
   });
-});
+};
 
+// Initialize database before starting server
+initializeDatabase()
+  .then(() => {
+    // Routes
+    app.get('/server-info', async (req, res) => {
+      try {
+        let instanceId = 'unknown';
+        let availabilityZone = 'unknown';
 
+        try {
+          const [instanceRes, azRes] = await Promise.all([
+            axios.get('http://169.254.169.254/latest/meta-data/instance-id', { timeout: 2000 }),
+            axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone', { timeout: 2000 })
+          ]);
+          instanceId = instanceRes.data;
+          availabilityZone = azRes.data;
+        } catch (error) {
+          console.log('Metadata service unavailable');
+        }
 
-// Routes
-app.get('/server-info', async (req, res) => {
-  try {
-    // Get instance ID from EC2 metadata service
-    var meta  = new AWS.MetadataService();
-    let instanceId = 'unknown';
-    let availabilityZone = 'unknown';
-
-    try {
-      // EC2 metadata is available at a special IP address from within EC2
-      instanceId = await axios.get('http://169.254.169.254/latest/meta-data/instance-id');
-
-      availabilityZone = await axios.get('http://169.254.169.254/latest/meta-data/placement/availability-zone');
-      
-      
-    } catch (error) {
-      console.log('Not running on EC2 or metadata service not available');
-    }
-
-    // Return server info
-    res.json({
-      instanceId: instanceId.data,
-      availabilityZone: availabilityZone.data,
-      hostname: os.hostname(),
-      timestamp: new Date().toISOString()
+        res.json({
+          instanceId,
+          availabilityZone,
+          hostname: os.hostname(),
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        res.status(500).json({ error: 'Server info unavailable' });
+      }
     });
-  } catch (error) {
-    console.error('Error fetching server info:', error);
-    res.status(500).json({ error: 'Failed to get server information' });
-  }
-});
 
+    // Add other routes here (keep your existing route handlers)
+    // ...
+
+    // Start server
+    const server = app.listen(port, () => {
+      console.log(`🚀 Server running on port ${port}`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received');
+      server.close(() => {
+        db.end();
+        console.log('🔌 Database connection closed');
+        process.exit(0);
+      });
+    });
+  })
+  .catch((err) => {
+    console.error('💥 FATAL INITIALIZATION ERROR:', err);
+    process.exit(1);
+  });
+
+// Database-enabled routes
 app.get('/', (req, res) => {
   res.status(200).json('Hello from Backend app!');
 });
 
-
+// Fetch all users
 app.get('/api/users', (req, res) => {
-  const query = 'SELECT * FROM users';
+  if (!db || db.state === 'disconnected') {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
 
-  db.query(query, (err, results) => {
+  db.query('SELECT * FROM users', (err, results) => {
     if (err) {
-      console.error('Error executing query:', err);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Database query failed' });
     }
-
     res.json(results);
   });
 });
 
+// Fetch user by ID
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   const query = 'SELECT * FROM users WHERE id = ?';
@@ -140,6 +166,7 @@ app.get('/api/users/:id', (req, res) => {
   });
 });
 
+// Create a new user
 app.post('/api/users', (req, res) => {
   const { name, email } = req.body;
 
@@ -159,6 +186,7 @@ app.post('/api/users', (req, res) => {
   });
 });
 
+// Update a user by ID
 app.put('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   const { name, email } = req.body;
@@ -183,6 +211,7 @@ app.put('/api/users/:id', (req, res) => {
   });
 });
 
+// Delete a user by ID
 app.delete('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   const query = 'DELETE FROM users WHERE id = ?';
@@ -198,19 +227,5 @@ app.delete('/api/users/:id', (req, res) => {
     }
 
     res.status(204).send();
-  });
-});
-
-// Start server
-const server = app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
   });
 });
