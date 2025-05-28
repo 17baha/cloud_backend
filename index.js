@@ -30,10 +30,10 @@ tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'ba
 
 // Database connection
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'databasetest.cysrpetj7pax.us-east-1.rds.amazonaws.com',
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'alaadmin',
-  database: process.env.DB_NAME || 'databasetest'
+  host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+  user: process.env.DB_USER || 'baha',
+  password: process.env.DB_PASSWORD || 'Cloud2025+',
+  database: process.env.DB_NAME || 'backend-db'
 });
 
 db.connect((err) => {
