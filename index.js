@@ -18,67 +18,111 @@ let db; // Declare db variable in outer scope
 
 // First connection (without database) to create the database
 const initializeDatabase = () => {
-  // First connection (without database) to create the database
-  const tempConnection = mysql.createConnection({
-    host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
-    user: process.env.DB_USER || 'baha',
-    password: process.env.DB_PASSWORD || 'Cloud2025+'
-  });
-
-  tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'backend-db'}`, (err) => {
-    if (err) {
-      console.error('❌ Error creating database:', err);
-      return;
-    }
-    console.log('✅ Database ensured');
-    tempConnection.end();
-
-    // Create main database connection
-    db = mysql.createConnection({
+  return new Promise((resolve, reject) => {
+    const tempConnection = mysql.createConnection({
       host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
       user: process.env.DB_USER || 'baha',
-      password: process.env.DB_PASSWORD || 'Cloud2025+',
-      database: process.env.DB_NAME || 'backend-db'
+      password: process.env.DB_PASSWORD || 'Cloud2025+'
     });
 
-    db.connect((err) => {
-      if (err) {
-        console.error('Error connecting to the database:', err);
-        return;
-      }
-      console.log('Connected to MySQL database');
+    tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'backend-db'}`, (err) => {
+      if (err) return reject(err);
       
-      // Fixed SQL query formatting
-      const createTableQuery = `
-        CREATE TABLE IF NOT EXISTS users (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          name VARCHAR(100) NOT NULL,
-          email VARCHAR(100) NOT NULL UNIQUE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `; // <-- FIXED CLOSING BACKTICK
+      tempConnection.end();
+      console.log('✅ Database ensured');
 
-      const insertUsersQuery = `
-        INSERT IGNORE INTO users (name, email) VALUES
-        ('John Doe', 'john@example.com'),
-        ('Jane Smith', 'jane@example.com'),
-        ('Bob Johnson', 'bob@example.com');
-      `;
+      // 🛠️ 3. Create main connection with promise
+      db = mysql.createConnection({
+        host: process.env.DB_HOST || 'backend-db.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+        user: process.env.DB_USER || 'baha',
+        password: process.env.DB_PASSWORD || 'Cloud2025+',
+        database: process.env.DB_NAME || 'backend-db'
+      });
 
-      db.query(createTableQuery, (err, result) => {
-        if (err) console.error('❌ Error creating table:', err);
-        else console.log('✅ Users table ready');
+      db.connect(async (err) => {
+        if (err) return reject(err);
+        console.log('✅ Connected to MySQL database');
 
-        db.query(insertUsersQuery, (err, result) => {
-          if (err) console.error('❌ Error inserting users:', err);
-          else console.log('✅ Sample users inserted');
-        });
+        try {
+          await createTables();
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
       });
     });
   });
 };
 
-initializeDatabase();
+// 🛠️ 4. Separate table creation with error handling
+const createTables = () => {
+  return new Promise((resolve, reject) => {
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );`;
+
+    db.query(createTableQuery, (err) => {
+      if (err) return reject(err);
+      console.log('✅ Users table ready');
+
+      const insertUsersQuery = `
+        INSERT IGNORE INTO users (name, email) VALUES
+        ('John Doe', 'john@example.com'),
+        ('Jane Smith', 'jane@example.com'),
+        ('Bob Johnson', 'bob@example.com');`;
+
+      db.query(insertUsersQuery, (err) => {
+        if (err) return reject(err);
+        console.log('✅ Sample users inserted');
+        resolve();
+      });
+    });
+  });
+};
+
+// 🛠️ 5. Initialize database before starting server
+initializeDatabase()
+  .then(() => {
+    const server = app.listen(port, () => {
+      console.log(`🚀 Server running on port ${port}`);
+    });
+
+    // 🛠️ 6. Proper shutdown handling
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received');
+      server.close(() => {
+        db.end();
+        console.log('🔌 Database connection closed');
+        process.exit(0);
+      });
+    });
+  })
+  .catch((err) => {
+    console.error('💥 FATAL INITIALIZATION ERROR:', err);
+    process.exit(1);
+  });
+
+// Routes (keep your existing routes but add connection check)
+app.get('/api/users', (req, res) => {
+  // 🛠️ 7. Better connection check
+  if (!db || db.state === 'disconnected') {
+    return res.status(503).json({ error: 'Database initializing, try again later' });
+  }
+
+  const query = 'SELECT * FROM users';
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('🔴 Database error:', err);
+      return res.status(500).json({ error: 'Database query failed' });
+    }
+    res.json(results);
+  });
+});
+
 
 // Routes
 // Server-info route FIXED
