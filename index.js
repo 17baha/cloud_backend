@@ -12,22 +12,22 @@ app.use(cors());
 app.use(express.json());
 
 const tempConnection = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD
+  host: process.env.DB_HOST || 'database.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+  user: process.env.DB_USER || 'baha',
+  password: process.env.DB_PASSWORD || 'Cloud2025+'
 });
 
-tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME}`, (err) => {
+tempConnection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'database'}`, (err) => {
   if (err) return console.error('❌ Error creating database:', err);
 
   console.log('✅ Database ensured');
   tempConnection.end();
 
   const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: process.env.DB_HOST || 'database.cnhkqaukyti2.us-east-1.rds.amazonaws.com',
+    user: process.env.DB_USER || 'baha',
+    password: process.env.DB_PASSWORD || 'Cloud2025+',
+    database: process.env.DB_NAME || 'database
   });
 
   db.connect((err) => {
